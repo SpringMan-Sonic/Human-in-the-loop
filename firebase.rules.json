@@ -1,0 +1,24 @@
+{
+  "rules": {
+    "help_requests": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["status", "createdAt", "timeoutAt"]
+    },
+    "knowledge_base": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["category", "createdAt", "useCount"]
+    },
+    "call_logs": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["timestamp", "sessionId"]
+    },
+    "notifications": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["timestamp", "type"]
+    }
+  }
+}
