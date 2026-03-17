@@ -15,10 +15,10 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
 async function initializeServices() {
-  console.log('🚀 Initializing services...');
+  console.log(' Initializing services...');
   await knowledgeBase.initialize();
   await aiAgent.initialize();
-  console.log('✅ All services initialized\n');
+  console.log(' All services initialized\n');
 }
 
 app.get('/api/help-requests', async (req, res) => {
@@ -138,11 +138,11 @@ async function startServer() {
 
   app.listen(PORT, () => {
     console.log('═══════════════════════════════════════');
-    console.log(`🚀 Backend API: http://localhost:${PORT}`);
-    console.log(`📊 Dashboard: http://localhost:${PORT}`);
-    console.log(`🏢 Business: ${process.env.BUSINESS_NAME}`);
+    console.log(` Backend API: http://localhost:${PORT}`);
+    console.log(` Dashboard: http://localhost:${PORT}`);
+    console.log(` Business: ${process.env.BUSINESS_NAME}`);
     console.log('═══════════════════════════════════════\n');
-    console.log('💡 Next: Start Python voice agent');
+    console.log(' Next: Start Python voice agent');
     console.log('   cd voice-agent');
     console.log('   python agent.py dev\n');
     console.log('Then open this url and select the LiveKit room : https://agents-playground.livekit.io/')
@@ -150,6 +150,6 @@ async function startServer() {
 }
 
 startServer().catch(error => {
-  console.error('❌ Failed to start server:', error);
+  console.error(' Failed to start server:', error);
   process.exit(1);
 });
