@@ -7,7 +7,7 @@ require('dotenv').config();
 class AIAgentService {
   constructor() {
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    this.model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" }); 
     this.confidenceThreshold = 0.7;
     this.conversationHistory = new Map();
   }
@@ -16,7 +16,7 @@ class AIAgentService {
     try {
       const context = await knowledgeBase.getContextString();
       this.businessContext = context;
-      console.log('✅ AI Agent initialized with knowledge base');
+      console.log(' AI Agent initialized with knowledge base');
     } catch (error) {
       console.error('Error initializing AI agent:', error);
       throw error;
@@ -32,14 +32,13 @@ ${this.businessContext}
 YOUR ROLE:
 - Answer customer questions about the business using ONLY the information provided above
 - Be friendly, professional, and concise
-- If you're not confident about an answer (confidence < 70%), say: "Let me check with my supervisor and get back to you"
+- If you're not confident about an answer, say exactly: "Let me check with my supervisor and get back to you"
 - Never make up information or guess
 - Always be polite and helpful
 
 RESPONSE FORMAT:
-For each response, you must evaluate your confidence:
-- If confidence >= 70%: Answer the question directly
-- If confidence < 70%: Say "Let me check with my supervisor and get back to you"
+- If you can answer confidently from the business information: Answer directly
+- If the question is outside the business information: Say "Let me check with my supervisor and get back to you"
 
 Remember: You're on a phone call, so keep responses natural and conversational.`;
   }
@@ -47,9 +46,9 @@ Remember: You're on a phone call, so keep responses natural and conversational.`
   async processMessage(message, sessionId, callerInfo = {}) {
     try {
       const knowledge = await knowledgeBase.search(message);
-      
+
       if (knowledge && knowledge.relevanceScore > this.confidenceThreshold) {
-        console.log(`✅ Found answer in knowledge base (score: ${knowledge.relevanceScore.toFixed(2)})`);
+        console.log(` Found answer in knowledge base (score: ${knowledge.relevanceScore.toFixed(2)})`);
         return {
           answer: knowledge.answer,
           needsHelp: false,
@@ -58,22 +57,26 @@ Remember: You're on a phone call, so keep responses natural and conversational.`
         };
       }
 
+     
+      console.log(' Not in knowledge base, asking Gemini...');
       const history = this.conversationHistory.get(sessionId) || [];
       const prompt = this._buildPrompt(message, history);
       const result = await this.model.generateContent(prompt);
       const response = result.response.text();
-      
+
       history.push(
         { role: 'user', content: message },
         { role: 'assistant', content: response }
       );
       this.conversationHistory.set(sessionId, history);
 
-      const needsHelp = this._shouldEscalate(response, knowledge);
+      // Step 3: Check if Gemini itself said it needs help
+      // ✅ Fixed: only check the AI response text, not knowledge score
+      const needsHelp = this._shouldEscalate(response);
 
       if (needsHelp) {
-        console.log('❓ AI needs help - escalating to supervisor');
-        
+        console.log(' AI needs help - escalating to supervisor');
+
         const request = await helpRequest.create({
           question: message,
           callerPhone: callerInfo.phone || 'unknown',
@@ -98,22 +101,44 @@ Remember: You're on a phone call, so keep responses natural and conversational.`
       return {
         answer: response,
         needsHelp: false,
-        confidence: knowledge ? knowledge.relevanceScore : 0.5,
+        confidence: 0.8,
         source: 'ai_generated'
       };
+
     } catch (error) {
       console.error('Error processing message:', error);
-      return {
-        answer: "I apologize, but I'm having trouble right now. Let me connect you with my supervisor.",
-        needsHelp: true,
-        error: error.message
-      };
+
+      try {
+        const request = await helpRequest.create({
+          question: message,
+          callerPhone: callerInfo.phone || 'unknown',
+          callerName: callerInfo.name || 'Unknown Caller',
+          sessionId: sessionId,
+          context: 'AI error during processing',
+          priority: 'high'
+        });
+        await notification.notifySupervisor(request);
+
+        return {
+          answer: "I apologize, but I'm having trouble right now. Let me connect you with my supervisor.",
+          needsHelp: true,
+          requestId: request.id,
+          error: error.message
+        };
+      } catch (reqError) {
+        console.error('Error creating fallback help request:', reqError);
+        return {
+          answer: "I apologize, but I'm having trouble right now. Let me connect you with my supervisor.",
+          needsHelp: true,
+          error: error.message
+        };
+      }
     }
   }
 
   _buildPrompt(message, history) {
     let prompt = this._getSystemPrompt() + '\n\n';
-    
+
     if (history.length > 0) {
       prompt += 'CONVERSATION HISTORY:\n';
       history.slice(-6).forEach(msg => {
@@ -121,34 +146,29 @@ Remember: You're on a phone call, so keep responses natural and conversational.`
       });
       prompt += '\n';
     }
-    
+
     prompt += `Customer: ${message}\nYou:`;
     return prompt;
   }
 
-  _shouldEscalate(response, knowledge) {
+  _shouldEscalate(response) {
     const escalationPhrases = [
       'let me check',
       'check with my supervisor',
       "i don't know",
       "i'm not sure",
-      "i don't have that information"
+      "i don't have that information",
+      "i cannot answer",
+      "not available in my information"
     ];
 
     const responseLower = response.toLowerCase();
-    const hasEscalationPhrase = escalationPhrases.some(phrase => 
-      responseLower.includes(phrase)
-    );
-
-    const lowConfidence = !knowledge || knowledge.relevanceScore < this.confidenceThreshold;
-
-    return hasEscalationPhrase || lowConfidence;
+    return escalationPhrases.some(phrase => responseLower.includes(phrase));
   }
 
   _formatContext(history) {
     if (history.length === 0) return 'No previous conversation';
-    
-    return history.slice(-4).map(msg => 
+    return history.slice(-4).map(msg =>
       `${msg.role === 'user' ? 'Customer' : 'AI'}: ${msg.content}`
     ).join('\n');
   }
@@ -156,9 +176,7 @@ Remember: You're on a phone call, so keep responses natural and conversational.`
   async handleSupervisorResponse(requestId, answer) {
     try {
       const request = await helpRequest.get(requestId);
-      if (!request) {
-        throw new Error('Help request not found');
-      }
+      if (!request) throw new Error('Help request not found');
 
       await helpRequest.resolve(requestId, answer);
 
@@ -174,8 +192,7 @@ Remember: You're on a phone call, so keep responses natural and conversational.`
       await notification.callbackCustomer(request, answer);
       await this.initialize();
 
-      console.log('✅ Supervisor response processed and knowledge base updated');
-
+      console.log('Supervisor response processed and knowledge base updated');
       return { success: true, requestId };
     } catch (error) {
       console.error('Error handling supervisor response:', error);
