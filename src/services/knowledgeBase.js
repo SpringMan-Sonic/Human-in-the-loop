@@ -61,7 +61,7 @@ class KnowledgeBaseService {
       }
     }
 
-    console.log('✅ Knowledge base initialized');
+    console.log('Knowledge base initialized');
   }
 
   async search(query) {
@@ -127,7 +127,7 @@ class KnowledgeBaseService {
       };
 
       await docRef.set(knowledge);
-      console.log(`✅ Added new knowledge: ${knowledge.question}`);
+      console.log(` Added new knowledge: ${knowledge.question}`);
       return knowledge;
     } catch (error) {
       console.error('Error adding knowledge:', error);
@@ -151,7 +151,7 @@ class KnowledgeBaseService {
         ...updates,
         updatedAt: new Date()
       });
-      console.log(`✅ Updated knowledge: ${id}`);
+      console.log(`Updated knowledge: ${id}`);
     } catch (error) {
       console.error('Error updating knowledge:', error);
       throw error;
@@ -161,7 +161,7 @@ class KnowledgeBaseService {
   async delete(id) {
     try {
       await this.collection.doc(id).delete();
-      console.log(`✅ Deleted knowledge: ${id}`);
+      console.log(` Deleted knowledge: ${id}`);
     } catch (error) {
       console.error('Error deleting knowledge:', error);
       throw error;
