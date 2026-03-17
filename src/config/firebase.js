@@ -13,9 +13,9 @@ try {
     credential: admin.credential.cert(serviceAccount),
     databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`
   });
-  console.log('✅ Firebase initialized successfully');
+  console.log('Firebase initialized successfully');
 } catch (error) {
-  console.error('❌ Firebase initialization error:', error.message);
+  console.error('Firebase initialization error:', error.message);
   process.exit(1);
 }
 
